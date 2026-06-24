@@ -1,6 +1,6 @@
 using System.Collections.Generic;
+using System.Collections;
 using UnityEngine;
-using UnityEngine.Audio;
 
 public class RoomDebug : MonoBehaviour
 {
@@ -11,6 +11,10 @@ public class RoomDebug : MonoBehaviour
     [SerializeField] private float pushStrength = 0.25f;
     [SerializeField] private float roomMargin = 10.0f;
 
+    [Header("Auto Resolve")]
+    [SerializeField] private float autoResolveInterval = 0.05f;
+    [SerializeField] private int maxAutoResolveSteps = 100;
+
     [Header("Gizmos")]
     [SerializeField] private Color roomColor = new Color(0.2f, 0.9f, 1.0f, 1.0f);
     [SerializeField] private Color centerColor = Color.yellow;
@@ -18,15 +22,24 @@ public class RoomDebug : MonoBehaviour
 
     private readonly RoomGenerator generator = new RoomGenerator();
     private List<RoomData> rooms = new List<RoomData>();
+    private Coroutine mAutoResolveCoroutine;
 
     private void OnEnable()
     {
         rooms = generator.GenerateRooms(roomCount);
     }
 
+    private void OnDisable()
+    {
+        stopAutoResolve();
+    }
+
     private void OnDrawGizmos()
     {
-        if (rooms == null || rooms.Count == 0) return;
+        if (rooms == null || rooms.Count == 0)
+        {
+            return;
+        }
 
         foreach (RoomData room in rooms)
         {
@@ -47,8 +60,49 @@ public class RoomDebug : MonoBehaviour
         rooms.Clear();
         rooms = generator.GenerateRooms(roomCount);
     }
-    private void stepOnce()
+
+    private bool stepOnce()
     {
-        generator.ResolveOverlapStep((List<RoomData>)rooms, roomMargin, pushStrength);
+        return generator.ResolveOverlapStep(rooms, roomMargin, pushStrength);
+    }
+
+    private void startAutoResolve()
+    {
+        if (Application.isPlaying == false)
+        {
+            Debug.LogWarning("Auto Resolve uses Coroutine, so enter Play Mode first.");
+            return;
+        }
+
+        stopAutoResolve();
+        mAutoResolveCoroutine = StartCoroutine(autoResolveCoroutine());
+    }
+
+    private void stopAutoResolve()
+    {
+        if (mAutoResolveCoroutine == null)
+        {
+            return;
+        }
+
+        StopCoroutine(mAutoResolveCoroutine);
+        mAutoResolveCoroutine = null;
+    }
+
+    private IEnumerator autoResolveCoroutine()
+    {
+        for (int stepIndex = 0; stepIndex < maxAutoResolveSteps; ++stepIndex)
+        {
+            bool bHasOverlap = stepOnce();
+
+            if (bHasOverlap == false)
+            {
+                break;
+            }
+
+            yield return new WaitForSeconds(autoResolveInterval);
+        }
+
+        mAutoResolveCoroutine = null;
     }
 }

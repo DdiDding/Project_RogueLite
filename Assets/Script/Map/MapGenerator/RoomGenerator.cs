@@ -25,14 +25,18 @@ public class RoomGenerator
     // 방 충돌하여 밀어내기
     // n^2 방식이있고, 누적방식이 있다.
     // 누적방식이 좀 더 효율적임
-    public void ResolveOverlap(List<RoomData> rooms)
+    public void ResolveOverlap(List<RoomData> rooms, float roomMargin, float pushStrength)
     {
-        Vector2[] moveAmount = new Vector2[rooms.Count];
+        // 충돌이 없을때까지 반복
+        while (ResolveOverlapStep(rooms, roomMargin, pushStrength) == true) { };
     }
 
 
-    public void ResolveOverlapStep(List<RoomData> rooms, float roomMargin, float pushStrength)
+    // 방 충돌하여 밀어내기
+    // 충돌이 일어나면 true, 충돌이 없으면 false 반환
+    public bool ResolveOverlapStep(List<RoomData> rooms, float roomMargin, float pushStrength)
     {
+        bool isOverlap = false;
         Vector2[] moveAmount = new Vector2[rooms.Count];
 
         for (int i = 0; i < rooms.Count; ++i)
@@ -40,6 +44,7 @@ public class RoomGenerator
             for(int j = i + 1; j < rooms.Count; ++j)
             {
                 if (aabb(rooms[i], rooms[j], roomMargin) == false) continue;
+                isOverlap = true;
 
                 RoomData roomA = rooms[i];
                 RoomData roomB = rooms[j];
@@ -63,10 +68,13 @@ public class RoomGenerator
             }
         }
 
+        if (isOverlap == false) return false;
+
         for (int i = 0; i < rooms.Count; ++i)
         {
             rooms[i].Center += moveAmount[i];
         }
+        return true;
     }
 
     // AABB 충돌 검사
