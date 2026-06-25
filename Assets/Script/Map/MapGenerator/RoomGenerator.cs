@@ -170,10 +170,10 @@ public class RoomGenerator
 
                 // 각 노드마다의 거리 저장
                 Vector2 dirVec = (roomA.Center - roomB.Center);
-                candidateEdges[int].Add((j, dirVec));
+                //candidateEdges[int].Add((j, dirVec));
             }
         }
-
+        return null;
         // 각 1차원 리스트를 정렬 후 k개만 남기고 삭제
     }
 }
