@@ -7,6 +7,21 @@ using System.Collections.Generic;
 public class RoomGenerator
 {
     /**************************************************************************/
+    // Private Struct
+    /**************************************************************************/
+    private struct CandidateEdge
+    {
+        public int RoomId;
+        public float SqrDistance;
+
+        public CandidateEdge(int roomId, float sqrDistance)
+        {
+            RoomId = roomId;
+            SqrDistance = sqrDistance;
+        }
+    }
+
+    /**************************************************************************/
     // Public Functions
     /**************************************************************************/
 
@@ -103,6 +118,14 @@ public class RoomGenerator
         return true;
     }
 
+    // 방연결
+    public void LinkRoom(List<RoomData> rooms)
+    {
+        // 우선 연결하고,
+
+        // 최적 그래프로 변환
+    }
+
     /**************************************************************************/
     // Private Functions
     /**************************************************************************/
@@ -131,5 +154,26 @@ public class RoomGenerator
         float bMaxY = b.Center.y + (b.Height + roomMargin) * 0.5f;
 
         return aMinX < bMaxX && aMaxX > bMinX && aMinY < bMaxY && aMaxY > bMinY;
+    }
+
+    // K_Nearest이용하여 노드들을 근처 k개만큼의 노드와 연결하는 함수
+    // param k 연결할 주변 노드 개수
+    private List<CandidateEdge> getCandidateEdge(List<RoomData> rooms, int k)
+    {
+        
+        List<List<CandidateEdge>> candidateEdges = new();
+        foreach (RoomData roomA in rooms)
+        {
+            foreach (RoomData roomB in rooms)
+            {
+                if (roomA.RoomID == roomB.RoomID) continue;
+
+                // 각 노드마다의 거리 저장
+                Vector2 dirVec = (roomA.Center - roomB.Center);
+                candidateEdges[int].Add((j, dirVec));
+            }
+        }
+
+        // 각 1차원 리스트를 정렬 후 k개만 남기고 삭제
     }
 }
