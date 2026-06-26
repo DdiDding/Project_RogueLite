@@ -3,18 +3,34 @@ using System.Collections.Generic;
 /**
  * @class RoomGenerator
  * @brief 스테이지의 방들을 생성,배치 및 연결하는 클래스
+ * @detail
+ * 맵을 생성하는 과정중 하나로, 맵 생성이 오래걸리기 때문에 후에 worker thread에서 동작할 예정이다.
  */
 public class RoomGenerator
 {
     /**************************************************************************/
+    // Private Values
+    /**************************************************************************/
+
+    /**
+     * @brief K-Nearest이용한 후보 간선 생성 시 각 방이 선택할 인접 방 개수
+     */
+    private readonly int mNearestNeighborAmount;
+
+    /**************************************************************************/
     // Private Struct
     /**************************************************************************/
-    private struct CandidateEdge
+   
+    /**
+     * @struct Edge
+     * @brief 방 간의 연결된 간선을 의미하는 구조체
+     */
+    private struct Edge
     {
         public int RoomId;
-        public float SqrDistance;
+        public float Distance;
 
-        public CandidateEdge(int roomId, float sqrDistance)
+        public Edge(int roomId, float sqrDistance)
         {
             RoomId = roomId;
             SqrDistance = sqrDistance;
@@ -24,6 +40,11 @@ public class RoomGenerator
     /**************************************************************************/
     // Public Functions
     /**************************************************************************/
+
+    public RoomGenerator(int nearestNeighborAmount)
+    {
+        mNearestNeighborAmount = nearestNeighborAmount;
+    }
 
     /**
      * @brief 방을 랜덤으로 생성한다.
@@ -48,6 +69,7 @@ public class RoomGenerator
 
         return rooms;
     }
+
 
     /**
      * @brief 겹친 방들이 없을 때까지 반복적으로 방을 밀어낸다.
@@ -118,12 +140,14 @@ public class RoomGenerator
         return true;
     }
 
+
     // 방연결
     public void LinkRoom(List<RoomData> rooms)
     {
         // 우선 연결하고,
+        List<List<Edge>> candidateEdges = getCandidateEdge(rooms, k);
 
-        // 최적 그래프로 변환
+        // 프림이나 크루스칼 사용아여 최적 그래프로 변환
     }
 
     /**************************************************************************/
@@ -132,10 +156,9 @@ public class RoomGenerator
 
     /**
      * @brief 두 방을 AABB알고리즘을 통해 겹치는지 검사한다.
-     * 
      * @detail
      * 각 방의 Width와 Height에 roomMargin을 더한 확장 영역을 기준으로 검사한다.
-     *
+     * 
      * @param a 검사할 첫 번째 방
      * @param b 검사할 두 번째 방
      * @param roomMargin 방 크기에 추가로 반영할 여백
@@ -156,24 +179,47 @@ public class RoomGenerator
         return aMinX < bMaxX && aMaxX > bMinX && aMinY < bMaxY && aMaxY > bMinY;
     }
 
-    // K_Nearest이용하여 노드들을 근처 k개만큼의 노드와 연결하는 함수
-    // param k 연결할 주변 노드 개수
-    private List<CandidateEdge> getCandidateEdge(List<RoomData> rooms, int k)
+
+    /**
+     * @brief K_Nearest이용하여 노드들을 근처 k개만큼의 노드와 연결하는 함수
+     * @param k 연결할 주변 노드 개수
+     * @return 2차 리스트로 구현한 인접리스트
+     * @todo 방 개수에 관하여 k값의 유효성 확인
+     * O(n^2)이라 최적화 가능하면 하기
+     * @warning 해당 방법은 방의 크기는 고려하지 않고 방의 중심만 고려하는 문제가 있음.
+     * 또한 RoomID를 인덱스처럼 사용하고 있어 roomID가 연속적이어야 한다.
+     * 그래프가 2개 이상이 생길 수 있음에 주의
+     */
+    private List<List<Edge>> getCandidateEdge(List<RoomData> rooms)
     {
-        
-        List<List<CandidateEdge>> candidateEdges = new();
+        int roomCount = rooms.Count;
+        List<List<Edge>> candidateEdges = new List<List<Edge>>(roomCount);
+        for (int i = 0; i < roomCount; i++)
+        {
+            candidateEdges.Add(new List<Edge>());
+        }
+
+        // 모든 연결을 통한 인접 리스트 생성
         foreach (RoomData roomA in rooms)
         {
             foreach (RoomData roomB in rooms)
             {
                 if (roomA.RoomID == roomB.RoomID) continue;
 
-                // 각 노드마다의 거리 저장
                 Vector2 dirVec = (roomA.Center - roomB.Center);
-                //candidateEdges[int].Add((j, dirVec));
+                // 직각 이동이기 때문에, 맨해튼 거리 사용하여 비교
+                float distance = abs(dirVec.x) + abs(dirVec.y);
+                candidateEdges[roomA.RoomID].Add(new Edge(roomB.RoomID, distance));
             }
         }
-        return null;
-        // 각 1차원 리스트를 정렬 후 k개만 남기고 삭제
+
+        // 각 1차원 리스트를 오름차순으로 정렬 후 k개만 남기고 삭제
+        foreach (List<Edge> edges in candidateEdges)
+        {
+            edges.Sort((l, r) => l.Distance.CompareTo(r.Distance));
+            edges.RemoveRange(mNearestNeighborAmount, edges.Count - mNearestNeighborAmount);
+        }
+
+        return candidateEdges;
     }
 }

@@ -28,7 +28,8 @@ public class RoomDebug : MonoBehaviour
     [SerializeField] private Color centerColor = Color.yellow;
     [SerializeField] private bool drawRoomIDs = true;
 
-    private readonly RoomGenerator generator = new RoomGenerator();
+    //@todo RoomGenerator 후에 k값 설정 제대로 하기
+    private readonly RoomGenerator generator = new RoomGenerator(3);
     private List<RoomData> rooms = new List<RoomData>();
     private Coroutine mAutoResolveCoroutine;
 
