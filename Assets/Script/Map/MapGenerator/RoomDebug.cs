@@ -26,11 +26,14 @@ public class RoomDebug : MonoBehaviour
     [Header("Gizmos")]
     [SerializeField] private Color roomColor = new Color(0.2f, 0.9f, 1.0f, 1.0f);
     [SerializeField] private Color centerColor = Color.yellow;
+    [SerializeField] private Color connectionColor = Color.green;
     [SerializeField] private bool drawRoomIDs = true;
+    [SerializeField] private bool drawConnections = true;
 
     //@todo RoomGenerator 후에 k값 설정 제대로 하기
     private readonly RoomGenerator generator = new RoomGenerator(3);
     private List<RoomData> rooms = new List<RoomData>();
+    private List<RoomGenerator.ConnectionEdge> connections = new List<RoomGenerator.ConnectionEdge>();
     private Coroutine mAutoResolveCoroutine;
 
     /**************************************************************************/
@@ -72,6 +75,26 @@ public class RoomDebug : MonoBehaviour
             Gizmos.color = centerColor;
             Gizmos.DrawSphere(roomPosition, 0.5f);
         }
+
+        if (drawConnections == false || connections == null)
+        {
+            return;
+        }
+
+        Gizmos.color = connectionColor;
+
+        foreach (RoomGenerator.ConnectionEdge connection in connections)
+        {
+            if (connection.mFrom < 0 || connection.mFrom >= rooms.Count ||
+                connection.mTo < 0 || connection.mTo >= rooms.Count)
+            {
+                continue;
+            }
+
+            Gizmos.DrawLine(
+                rooms[connection.mFrom].Center,
+                rooms[connection.mTo].Center);
+        }
     }
 
 
@@ -84,7 +107,16 @@ public class RoomDebug : MonoBehaviour
     private void generateRooms()
     {
         rooms.Clear();
+        connections.Clear();
         rooms = generator.GenerateRooms(roomCount);
+    }
+
+    /**
+     * @brief 현재 방 배치를 기준으로 최소 신장 트리 간선을 생성한다.
+     */
+    private void generateConnections()
+    {
+        connections = generator.LinkRoom(rooms);
     }
 
     /**
@@ -92,7 +124,14 @@ public class RoomDebug : MonoBehaviour
      */
     private bool stepOnce()
     {
-        return generator.ResolveOverlapStep(rooms, roomMargin, pushStrength);
+        bool hasOverlap = generator.ResolveOverlapStep(rooms, roomMargin, pushStrength);
+
+        if (hasOverlap)
+        {
+            connections.Clear();
+        }
+
+        return hasOverlap;
     }
 
     /**
@@ -112,7 +151,7 @@ public class RoomDebug : MonoBehaviour
     }
 
     /**
-     * @brief 실행 중인 자동 겹침 해소 Coroutine을 중지한다.
+     * @brief 실행 중인 자동 겹침 해소 Coroutine을 중지, 그후 방을 그리드에 맞춘다.
      */
     private void stopAutoResolve()
     {
@@ -123,6 +162,8 @@ public class RoomDebug : MonoBehaviour
 
         StopCoroutine(mAutoResolveCoroutine);
         mAutoResolveCoroutine = null;
+
+        generator.SnapRoomsToGrid(rooms);
     }
 
 

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /**
@@ -7,6 +8,7 @@ using UnityEngine;
 public class RoomData
 {
     public Vector2 Center { get; set; }
+    public List<Vector2> Doors { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
     public int RoomID { get; set; }

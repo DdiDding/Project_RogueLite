@@ -30,6 +30,7 @@ public class RoomDebugEditor : Editor
         DrawActionButton(roomDebug, "Step Once", "stepOnce");
         DrawActionButton(roomDebug, "Start Auto Resolve", "startAutoResolve");
         DrawActionButton(roomDebug, "Stop Auto Resolve", "stopAutoResolve");
+        DrawActionButton(roomDebug, "Generate Connections", "generateConnections");
     }
 
     /**
