@@ -1,5 +1,21 @@
 using System.Collections.Generic;
+using System.Collections.Generic;
+
 using UnityEngine;
+using UnityEngine;
+
+
+/**
+ * @struct RoomBounds
+ * @brief 각 테두리의 좌표
+ */
+public struct RoomBounds
+{
+    public int Left;
+    public int Right;
+    public int Top;
+    public int Bottom;
+}
 
 /**
  * @class RoomData
@@ -8,6 +24,7 @@ using UnityEngine;
 public class RoomData
 {
     public Vector2 Center { get; set; }
+    public RoomBounds Bounds { get; set; }
     public List<Vector2> Doors { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
@@ -18,3 +35,5 @@ public class RoomData
         Center = Vector2.zero;
     }
 }
+
+

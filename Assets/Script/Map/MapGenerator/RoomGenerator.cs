@@ -397,19 +397,43 @@ public class RoomGenerator
 
 
     /**
-     * 문 만들기
+     * @brief 두 방을 연결하는 문 후보를 생성한다.
+     * @param roomA 연결할 첫 번째 방
+     * @param roomB 연결할 두 번째 방
      */
-    private void CreateDoor(RoomData roomA, RoomData roomB)
+    private void createDoorCandidate(RoomData roomA, RoomData roomB)
     {
-        // 차이가 큰 축을 기준으로 연결 방향 선택
-        Vector2 delta = roomA.Center - roomB.Center;
+        // 간선과 방 테두리의 교점을 임시 문으로 설정
+        /**
+        1. A에서 B로 향하는 벡터구하기
+        Vector2 roomDist = roomB.Center - roomA.Center;
+        float halfWidth = roomA.Width / 2;
+        float halfHeight = roomA.Height / 2;
+
+        2. 간선 방향으로 먼저 도달하는 벽 구하기
+        //비율로 계산하여 구함
+        float tx = halfWidth / math.abs(roomDist.x);
+        float yt = halfHeight / math.abs(roomDist.y);
+        
+        // 작은 쪽이 먼저 만나는 벽임.
+
+        */
+    }
+
+    private Vector2 calculateDoorCandidate(RoomData room, Vector2 target)
+    {
+        Vector2 direction = target - room.Center;
+
+        // 1. A에서 B로 향하는 벡터구하기
+        float halfWidth = room.Width * 0.5f;
+        float halfHeight = room.Height * 0.5f;
+
+        // 2.간선 방향으로 먼저 도달하는 벽 구하기
+        //비율로 계산하여 구함
+        float tx = halfWidth / math.abs(roomDist.x);
+        float ty = halfHeight / math.abs(roomDist.y);
 
 
-        // 마주 보는 벽 선택
-
-        // 벽 범위 양끝에서 제한하여 모서리에 문이 생기지 않도록 제한
-
-        // 
     }
 
 }
