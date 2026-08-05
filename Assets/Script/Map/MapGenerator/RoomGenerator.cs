@@ -137,8 +137,14 @@ public class RoomGenerator
             RoomData room = new RoomData();
             room.RoomID = i;
             room.Center = Vector2.zero;
+
             room.Height = Random.Range(10, 30); /*int만 생성*/
+            bool isHeightEven = room.Height % 2 == 0;
+            if (isHeightEven) room.Height += 1; /*홀수로 만들어주기*/
+
             room.Width = Random.Range(10, 30);
+            bool isEvenWidth = room.Width % 2 == 0;
+            if (isEvenWidth) room.Width += 1; /*홀수로 만들어주기*/
 
             rooms.Add(room);
         }
@@ -258,6 +264,124 @@ public class RoomGenerator
         return connections;
     }
 
+    /**
+     * @brief 모든 연결 간선의 문 후보를 생성한다.
+     * @param rooms 연결된 방 목록
+     * @param connections 크루스칼 알고리즘으로 선택된 연결 간선 목록
+     * @return 간선별 문 후보를 저장한 연결 계획 목록
+     */
+    public List<ConnectionPlan> CreateDoorCandidates( List<RoomData> rooms, List<ConnectionEdge> connections)
+    {
+        List<ConnectionPlan> connectionPlans = new List<ConnectionPlan>(connections.Count);
+
+        foreach (ConnectionEdge connection in connections)
+        {
+            RoomData roomA = rooms[connection.mFrom];
+            RoomData roomB = rooms[connection.mTo];
+            connectionPlans.Add(createDoorCandidate(roomA, roomB));
+        }
+
+        return connectionPlans;
+    }
+
+    /**
+     * @brief 문 후보 좌표를 복도 생성에 사용할 임시 타일 좌표로 변환한다.
+     * @param connectionPlans 변환할 연결 계획 목록
+     */
+    public void SnapDoorCandidatesToGrid(List<ConnectionPlan> connectionPlans)
+    {
+        foreach (ConnectionPlan connectionPlan in connectionPlans)
+        {
+            connectionPlan.FromDoorCell =
+                Vector2Int.RoundToInt(connectionPlan.FromDoorCandidate);
+            connectionPlan.ToDoorCell =
+                Vector2Int.RoundToInt(connectionPlan.ToDoorCandidate);
+            connectionPlan.FromDoorSide = DoorSide.Unknown;
+            connectionPlan.ToDoorSide = DoorSide.Unknown;
+            connectionPlan.CorridorWaypoints.Clear();
+            connectionPlan.CorridorPath.Clear();
+        }
+    }
+
+    /**
+     * @brief 각 문 후보가 방의 어느 벽에 위치하는지 판정한다.
+     * @param rooms 연결된 방 목록
+     * @param connectionPlans 판정할 연결 계획 목록
+     */
+    public void DetermineDoorSides(List<RoomData> rooms, List<ConnectionPlan> connectionPlans)
+    {
+        Debug.Assert(rooms != null);
+        foreach (ConnectionPlan plan in connectionPlans)
+        {
+            RoomData fromRoom = rooms[plan.FromRoomID];
+            RoomData toRoom = rooms[plan.ToRoomID];
+
+            plan.FromDoorSide = calculateDoorSide(fromRoom, plan.FromDoorCandidate);
+            plan.ToDoorSide = calculateDoorSide(toRoom, plan.ToDoorCandidate);
+            plan.CorridorWaypoints.Clear();
+            plan.CorridorPath.Clear();
+        }
+    }
+
+    /**
+     * @brief 같은 축의 문 쌍에 Z자 복도 경유점을 생성한다.
+     * @param connectionPlans 경유점을 생성할 연결 계획 목록
+     */
+    public void CreateSameAxisCorridorWaypoints(List<ConnectionPlan> connectionPlans)
+    {
+        foreach (ConnectionPlan plan in connectionPlans)
+        {
+            bool fromHorizontal = isHorizontalDoorSide(plan.FromDoorSide);
+            bool toHorizontal = isHorizontalDoorSide(plan.ToDoorSide);
+
+            plan.CorridorWaypoints.Clear();
+            plan.CorridorPath.Clear();
+
+            // 두 문이 같은 축에 위치하지 않으면 Z자 복도 경유점을 생성하지 않는다
+            if (fromHorizontal != toHorizontal) continue;
+
+
+            // 시작점 추가
+            addCorridorWaypoint(plan.CorridorWaypoints, plan.FromDoorCell);
+
+            // 꺾임점 추가
+            if (fromHorizontal)
+            {
+                int middleX = Mathf.RoundToInt((plan.FromDoorCell.x + plan.ToDoorCell.x) * 0.5f);
+
+                addCorridorWaypoint(plan.CorridorWaypoints, new Vector2Int(middleX, plan.FromDoorCell.y));
+                addCorridorWaypoint(plan.CorridorWaypoints, new Vector2Int(middleX, plan.ToDoorCell.y));
+            }
+            else
+            {
+                int middleY = Mathf.RoundToInt((plan.FromDoorCell.y + plan.ToDoorCell.y) * 0.5f);
+
+                addCorridorWaypoint(plan.CorridorWaypoints, new Vector2Int(plan.FromDoorCell.x, middleY));
+                addCorridorWaypoint(plan.CorridorWaypoints, new Vector2Int(plan.ToDoorCell.x, middleY));
+            }
+
+            // 도착점 추가
+            addCorridorWaypoint(plan.CorridorWaypoints, plan.ToDoorCell);
+        }
+    }
+
+    /**
+     * @brief 복도 경유점 사이를 한 칸 간격의 정수 셀로 채운다
+     * @param connectionPlans 복도 경로를 생성할 연결할 데이터
+     */
+    public void CreateCorridorPaths(List<ConnectionPlan> connectionPlans)
+    {
+        foreach (ConnectionPlan plan in connectionPlans)
+        {
+            plan.CorridorPath.Clear();
+
+            for (int i = 0; i < plan.CorridorWaypoints.Count - 1; ++i)
+            {
+                addCorridorSegment(plan.CorridorPath, plan.CorridorWaypoints[i], plan.CorridorWaypoints[i + 1]);
+            }
+        }
+    }
+
     /**************************************************************************/
     // Private Functions
     /**************************************************************************/
@@ -342,6 +466,7 @@ public class RoomGenerator
         return candidateEdges;
     }
 
+
     /**
      * @brief 후보 간선 목록에 크루스칼 알고리즘을 적용한다.
      * @param edges 방별 후보 간선 인접 리스트
@@ -400,40 +525,99 @@ public class RoomGenerator
      * @brief 두 방을 연결하는 문 후보를 생성한다.
      * @param roomA 연결할 첫 번째 방
      * @param roomB 연결할 두 번째 방
+     * @return 두 방과 각 방의 문 후보를 저장한 연결 계획
      */
-    private void createDoorCandidate(RoomData roomA, RoomData roomB)
+    private ConnectionPlan createDoorCandidate(RoomData roomA, RoomData roomB)
     {
-        // 간선과 방 테두리의 교점을 임시 문으로 설정
-        /**
-        1. A에서 B로 향하는 벡터구하기
-        Vector2 roomDist = roomB.Center - roomA.Center;
-        float halfWidth = roomA.Width / 2;
-        float halfHeight = roomA.Height / 2;
+        Vector2 roomADoorCandidate = calculateDoorCandidate(roomA, roomB.Center);
+        Vector2 roomBDoorCandidate = calculateDoorCandidate(roomB, roomA.Center);
 
-        2. 간선 방향으로 먼저 도달하는 벽 구하기
-        //비율로 계산하여 구함
-        float tx = halfWidth / math.abs(roomDist.x);
-        float yt = halfHeight / math.abs(roomDist.y);
-        
-        // 작은 쪽이 먼저 만나는 벽임.
-
-        */
+        return new ConnectionPlan(
+            roomA.RoomID,
+            roomB.RoomID,
+            roomADoorCandidate,
+            roomBDoorCandidate);
     }
 
+    /**
+     * @brief room에서 target으로 향하는 벡터와 방의 테두리의 접점을 계산한다.
+     * @param room 연결을 시작하는 방
+     * @param target 연결이 끝날 방의 중앙 좌표
+     */
     private Vector2 calculateDoorCandidate(RoomData room, Vector2 target)
     {
         Vector2 direction = target - room.Center;
 
-        // 1. A에서 B로 향하는 벡터구하기
         float halfWidth = room.Width * 0.5f;
         float halfHeight = room.Height * 0.5f;
 
-        // 2.간선 방향으로 먼저 도달하는 벽 구하기
-        //비율로 계산하여 구함
-        float tx = halfWidth / math.abs(roomDist.x);
-        float ty = halfHeight / math.abs(roomDist.y);
+        // 간선 방향으로 먼저 벽에 도달하기까지 필요한 값
+        float tx = halfWidth / Mathf.Abs(direction.x);
+        float ty = halfHeight / Mathf.Abs(direction.y);
+
+        // 적은 값이 먼저 벽과 접하는 지점임
+        float intersectionRatio = Mathf.Min(tx, ty);
+        return room.Center + direction * intersectionRatio;
+    }
+
+    /**
+     * @brief 문 후보가 위치한 방의 벽 방향을 계산한다.
+     */
+    private DoorSide calculateDoorSide(RoomData room, Vector2 doorCandidate)
+    {
+        Vector2 offset = doorCandidate - room.Center;
+
+        // 방 크기로 정규화한 축 거리의 비율을 계산 (나눗셈을 없애기 위한 곱셉 적용)
+        float horizontalRatio = Mathf.Abs(offset.x) * room.Height;
+        float verticalRatio = Mathf.Abs(offset.y) * room.Width;
+
+        // 벽까지의 비율은 항상 100%므로 당연하게도 더 큰 비율이 문이 위치한 벽임
+        if (horizontalRatio >= verticalRatio)
+        {
+            return offset.x < 0f ? DoorSide.Left : DoorSide.Right;
+        }
+
+        return offset.y < 0f ? DoorSide.Bottom : DoorSide.Top;
+    }
+
+    private bool isHorizontalDoorSide(DoorSide doorSide)
+    {
+        return doorSide == DoorSide.Left || doorSide == DoorSide.Right;
+    }
 
 
+    /**
+     * @brief 직전 경유점과 중복되지 않을 때만 새 경유점을 추가한다.
+     * @param waypoints 복도 경유점 목록
+     * @param waypoint 추가할 경유점
+     */
+    private void addCorridorWaypoint(List<Vector2Int> waypoints, Vector2Int waypoint)
+    {
+        if (waypoints.Count == 0 || waypoints[waypoints.Count - 1] != waypoint)
+        {
+            waypoints.Add(waypoint);
+        }
+    }
+
+    /**
+     * @brief 수평 또는 수직인 두 경유점 사이의 모든 셀을 복도 경로에 추가한다.
+     */
+    private void addCorridorSegment(List<Vector2Int> corridorPath, Vector2Int start, Vector2Int end)
+    {
+        if (corridorPath.Count == 0 || corridorPath[corridorPath.Count - 1] != start)
+        {
+            corridorPath.Add(start);
+        }
+
+        // 진행방향
+        Vector2Int step = new Vector2Int(end.x.CompareTo(start.x), end.y.CompareTo(start.y));
+        Vector2Int current = start;
+
+        while (current != end)
+        {
+            current += step;
+            corridorPath.Add(current);
+        }
     }
 
 }

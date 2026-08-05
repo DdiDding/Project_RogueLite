@@ -27,13 +27,18 @@ public class RoomDebug : MonoBehaviour
     [SerializeField] private Color roomColor = new Color(0.2f, 0.9f, 1.0f, 1.0f);
     [SerializeField] private Color centerColor = Color.yellow;
     [SerializeField] private Color connectionColor = Color.green;
+    [SerializeField] private Color doorCandidateColor = Color.magenta;
+    [SerializeField] private Color corridorColor = Color.red;
     [SerializeField] private bool drawRoomIDs = true;
     [SerializeField] private bool drawConnections = true;
+    [SerializeField] private bool drawDoorCandidates = true;
+    [SerializeField] private bool drawCorridors = true;
 
     //@todo RoomGenerator 후에 k값 설정 제대로 하기
     private readonly RoomGenerator generator = new RoomGenerator(3);
     private List<RoomData> rooms = new List<RoomData>();
     private List<RoomGenerator.ConnectionEdge> connections = new List<RoomGenerator.ConnectionEdge>();
+    private List<ConnectionPlan> connectionPlans = new List<ConnectionPlan>();
     private Coroutine mAutoResolveCoroutine;
 
     /**************************************************************************/
@@ -70,30 +75,55 @@ public class RoomDebug : MonoBehaviour
             Vector2 roomPosition = new Vector2(room.Center.x, room.Center.y);
             Vector2 roomSize = new Vector2(room.Width, room.Height);
 
+
             Gizmos.DrawWireCube(roomPosition, roomSize);
 
             Gizmos.color = centerColor;
             Gizmos.DrawSphere(roomPosition, 0.5f);
         }
 
-        if (drawConnections == false || connections == null)
+        if (drawConnections && connections != null)
         {
-            return;
+            Gizmos.color = connectionColor;
+
+            foreach (RoomGenerator.ConnectionEdge connection in connections)
+            {
+                if (connection.mFrom < 0 || connection.mFrom >= rooms.Count ||
+                    connection.mTo < 0 || connection.mTo >= rooms.Count)
+                {
+                    continue;
+                }
+
+                Gizmos.DrawLine(
+                    rooms[connection.mFrom].Center,
+                    rooms[connection.mTo].Center);
+            }
         }
 
-        Gizmos.color = connectionColor;
-
-        foreach (RoomGenerator.ConnectionEdge connection in connections)
+        if (drawDoorCandidates && connectionPlans != null)
         {
-            if (connection.mFrom < 0 || connection.mFrom >= rooms.Count ||
-                connection.mTo < 0 || connection.mTo >= rooms.Count)
-            {
-                continue;
-            }
+            Gizmos.color = doorCandidateColor;
 
-            Gizmos.DrawLine(
-                rooms[connection.mFrom].Center,
-                rooms[connection.mTo].Center);
+            foreach (ConnectionPlan connectionPlan in connectionPlans)
+            {
+                Gizmos.DrawSphere(connectionPlan.FromDoorCandidate, 1.0f);
+                Gizmos.DrawSphere(connectionPlan.ToDoorCandidate, 1.0f);
+            }
+        }
+
+        if (drawCorridors && connectionPlans != null)
+        {
+            Gizmos.color = corridorColor;
+
+            foreach (ConnectionPlan connectionPlan in connectionPlans)
+            {
+                foreach (Vector2Int corridorCell in connectionPlan.CorridorPath)
+                {
+                    Gizmos.DrawWireCube(
+                        new Vector3(corridorCell.x, corridorCell.y, 0f),
+                        Vector3.one);
+                }
+            }
         }
     }
 
@@ -108,6 +138,7 @@ public class RoomDebug : MonoBehaviour
     {
         rooms.Clear();
         connections.Clear();
+        connectionPlans.Clear();
         rooms = generator.GenerateRooms(roomCount);
     }
 
@@ -117,6 +148,19 @@ public class RoomDebug : MonoBehaviour
     private void generateConnections()
     {
         connections = generator.LinkRoom(rooms);
+        connectionPlans.Clear();
+    }
+
+    /**
+     * @brief 현재 연결 간선을 기준으로 문 후보 계획을 생성한다.
+     */
+    private void generateDoorCandidates()
+    {
+        connectionPlans = generator.CreateDoorCandidates(rooms, connections);
+        generator.SnapDoorCandidatesToGrid(connectionPlans);
+        generator.DetermineDoorSides(rooms, connectionPlans);
+        generator.CreateSameAxisCorridorWaypoints(connectionPlans);
+        generator.CreateCorridorPaths(connectionPlans);
     }
 
     /**
@@ -129,6 +173,7 @@ public class RoomDebug : MonoBehaviour
         if (hasOverlap)
         {
             connections.Clear();
+            connectionPlans.Clear();
         }
 
         return hasOverlap;
