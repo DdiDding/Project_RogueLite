@@ -29,16 +29,21 @@ public class RoomDebug : MonoBehaviour
     [SerializeField] private Color connectionColor = Color.green;
     [SerializeField] private Color doorCandidateColor = Color.magenta;
     [SerializeField] private Color corridorColor = Color.red;
+    [SerializeField] private Color floorCellColor = Color.white;
+    [SerializeField] private Color doorCellColor = new Color(1f, 0.5f, 0f, 1f);
     [SerializeField] private bool drawRoomIDs = true;
     [SerializeField] private bool drawConnections = true;
     [SerializeField] private bool drawDoorCandidates = true;
     [SerializeField] private bool drawCorridors = true;
+    [SerializeField] private bool drawFloorCells = true;
+    [SerializeField] private bool drawDoorCells = true;
 
     //@todo RoomGenerator 후에 k값 설정 제대로 하기
     private readonly RoomGenerator generator = new RoomGenerator(3);
     private List<RoomData> rooms = new List<RoomData>();
     private List<RoomGenerator.ConnectionEdge> connections = new List<RoomGenerator.ConnectionEdge>();
     private List<ConnectionPlan> connectionPlans = new List<ConnectionPlan>();
+    private MapGridData mapGridData;
     private Coroutine mAutoResolveCoroutine;
 
     /**************************************************************************/
@@ -82,6 +87,8 @@ public class RoomDebug : MonoBehaviour
             Gizmos.DrawSphere(roomPosition, 0.5f);
         }
 
+
+        // 간선 그리기
         if (drawConnections && connections != null)
         {
             Gizmos.color = connectionColor;
@@ -100,6 +107,7 @@ public class RoomDebug : MonoBehaviour
             }
         }
 
+        // 문 후보 그리기
         if (drawDoorCandidates && connectionPlans != null)
         {
             Gizmos.color = doorCandidateColor;
@@ -111,6 +119,7 @@ public class RoomDebug : MonoBehaviour
             }
         }
 
+        // 복도 그리기
         if (drawCorridors && connectionPlans != null)
         {
             Gizmos.color = corridorColor;
@@ -119,10 +128,42 @@ public class RoomDebug : MonoBehaviour
             {
                 foreach (Vector2Int corridorCell in connectionPlan.CorridorPath)
                 {
-                    Gizmos.DrawWireCube(
-                        new Vector3(corridorCell.x, corridorCell.y, 0f),
-                        Vector3.one);
+                    Gizmos.DrawWireCube(new Vector3(corridorCell.x, corridorCell.y, 0f), Vector3.one);
                 }
+            }
+        }
+
+        if (drawFloorCells && mapGridData != null)
+        {
+            Gizmos.color = floorCellColor;
+
+            for (int arrayY = 0; arrayY < mapGridData.Height; ++arrayY)
+            {
+                for (int arrayX = 0; arrayX < mapGridData.Width; ++arrayX)
+                {
+                    if (mapGridData.Cells[arrayX, arrayY] != MapCellType.Floor)
+                    {
+                        continue;
+                    }
+
+                    Vector3 cellPosition = new Vector3(
+                        arrayX + mapGridData.Origin.x,
+                        arrayY + mapGridData.Origin.y,
+                        0f);
+                    Gizmos.DrawWireCube(cellPosition, Vector3.one);
+                }
+            }
+        }
+
+        if (drawDoorCells && mapGridData != null)
+        {
+            Gizmos.color = doorCellColor;
+
+            foreach (Vector2Int doorCell in mapGridData.DoorCells)
+            {
+                Gizmos.DrawWireCube(
+                    new Vector3(doorCell.x, doorCell.y, 0f),
+                    Vector3.one * 0.6f);
             }
         }
     }
@@ -139,6 +180,7 @@ public class RoomDebug : MonoBehaviour
         rooms.Clear();
         connections.Clear();
         connectionPlans.Clear();
+        mapGridData = null;
         rooms = generator.GenerateRooms(roomCount);
     }
 
@@ -149,6 +191,7 @@ public class RoomDebug : MonoBehaviour
     {
         connections = generator.LinkRoom(rooms);
         connectionPlans.Clear();
+        mapGridData = null;
     }
 
     /**
@@ -161,6 +204,15 @@ public class RoomDebug : MonoBehaviour
         generator.DetermineDoorSides(rooms, connectionPlans);
         generator.CreateSameAxisCorridorWaypoints(connectionPlans);
         generator.CreateCorridorPaths(connectionPlans);
+        mapGridData = null;
+    }
+
+    private void generateMapCells()
+    {
+        generator.SnapRoomsToGrid(rooms);
+        mapGridData = generator.CreateEmptyMapGridData(rooms, connectionPlans);
+        generator.FillRoomCells(mapGridData, rooms);
+        generator.FillConnectionCells(mapGridData, connectionPlans);
     }
 
     /**
@@ -174,6 +226,7 @@ public class RoomDebug : MonoBehaviour
         {
             connections.Clear();
             connectionPlans.Clear();
+            mapGridData = null;
         }
 
         return hasOverlap;
@@ -209,6 +262,7 @@ public class RoomDebug : MonoBehaviour
         mAutoResolveCoroutine = null;
 
         generator.SnapRoomsToGrid(rooms);
+        mapGridData = null;
     }
 
 

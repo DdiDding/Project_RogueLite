@@ -32,6 +32,7 @@ public class RoomDebugEditor : Editor
         DrawActionButton(roomDebug, "Stop Auto Resolve", "stopAutoResolve");
         DrawActionButton(roomDebug, "Generate Connections", "generateConnections");
         DrawActionButton(roomDebug, "Generate Door Candidates", "generateDoorCandidates");
+        DrawActionButton(roomDebug, "Generate Map Cells", "generateMapCells");
     }
 
     /**

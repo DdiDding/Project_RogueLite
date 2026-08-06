@@ -230,7 +230,19 @@ public class RoomGenerator
     {
         foreach(RoomData room in rooms)
         {
-            room.Center = new Vector2(Mathf.RoundToInt(room.Center.x), Mathf.RoundToInt(room.Center.y));
+            int centerX = Mathf.RoundToInt(room.Center.x);
+            int centerY = Mathf.RoundToInt(room.Center.y);
+            int halfWidth = room.Width / 2;
+            int halfHeight = room.Height / 2;
+
+            room.Center = new Vector2(centerX, centerY);
+            room.Bounds = new RoomBounds
+            {
+                Left = centerX - halfWidth,
+                Right = centerX + halfWidth,
+                Bottom = centerY - halfHeight,
+                Top = centerY + halfHeight
+            };
         }
     }
 
@@ -379,6 +391,96 @@ public class RoomGenerator
             {
                 addCorridorSegment(plan.CorridorPath, plan.CorridorWaypoints[i], plan.CorridorWaypoints[i + 1]);
             }
+        }
+    }
+
+
+    // 전체 맵이 들어갈 크기를 확보하기 위한 배열
+    public MapGridData CreateEmptyMapGridData(List<RoomData> rooms, List<ConnectionPlan> connectionPlans)
+    {
+        if (rooms.Count == 0)
+        {
+            return new MapGridData(Vector2Int.zero, 0, 0);
+        }
+
+        int minX = int.MaxValue;
+        int maxX = int.MinValue;
+        int minY = int.MaxValue;
+        int maxY = int.MinValue;
+
+        foreach (RoomData room in rooms)
+        {
+            minX = System.Math.Min(minX, room.Bounds.Left);
+            maxX = System.Math.Max(maxX, room.Bounds.Right);
+            minY = System.Math.Min(minY, room.Bounds.Bottom);
+            maxY = System.Math.Max(maxY, room.Bounds.Top);
+        }
+
+        if (connectionPlans != null)
+        {
+            foreach (ConnectionPlan plan in connectionPlans)
+            {
+                includeCell(plan.FromDoorCell, ref minX, ref maxX, ref minY, ref maxY);
+                includeCell(plan.ToDoorCell, ref minX, ref maxX, ref minY, ref maxY);
+
+                foreach (Vector2Int corridorCell in plan.CorridorPath)
+                {
+                    includeCell(corridorCell, ref minX, ref maxX, ref minY, ref maxY);
+                }
+            }
+        }
+
+        const int wallPadding = 1;
+        minX -= wallPadding;
+        maxX += wallPadding;
+        minY -= wallPadding;
+        maxY += wallPadding;
+
+        return new MapGridData(
+            new Vector2Int(minX, minY),
+            maxX - minX + 1,
+            maxY - minY + 1);
+    }
+
+    // 방 저장
+    public void FillRoomCells(MapGridData mapGridData, List<RoomData> rooms)
+    {
+        if (mapGridData == null)
+        {
+            throw new System.ArgumentNullException(nameof(mapGridData));
+        }
+
+        if (rooms == null)
+        {
+            throw new System.ArgumentNullException(nameof(rooms));
+        }
+
+        foreach (RoomData room in rooms)
+        {
+            for (int cellY = room.Bounds.Bottom; cellY <= room.Bounds.Top; ++cellY)
+            {
+                for (int cellX = room.Bounds.Left; cellX <= room.Bounds.Right; ++cellX)
+                {
+                    setCell(mapGridData, new Vector2Int(cellX, cellY), MapCellType.Floor);
+                }
+            }
+        }
+    }
+
+    // 복도,문 저장
+    public void FillConnectionCells(MapGridData mapGridData, List<ConnectionPlan> connectionPlans)    
+    {
+        foreach (ConnectionPlan plan in connectionPlans)
+        {
+            foreach (Vector2Int corridorCell in plan.CorridorPath)
+            {
+                setCell(mapGridData, corridorCell, MapCellType.Floor);
+            }
+
+            setCell(mapGridData, plan.FromDoorCell, MapCellType.Floor);
+            setCell(mapGridData, plan.ToDoorCell, MapCellType.Floor);
+            mapGridData.DoorCells.Add(plan.FromDoorCell);
+            mapGridData.DoorCells.Add(plan.ToDoorCell);
         }
     }
 
@@ -620,4 +722,18 @@ public class RoomGenerator
         }
     }
 
+    private void includeCell(Vector2Int cell, ref int minX, ref int maxX, ref int minY, ref int maxY)
+    {
+        minX = System.Math.Min(minX, cell.x);
+        maxX = System.Math.Max(maxX, cell.x);
+        minY = System.Math.Min(minY, cell.y);
+        maxY = System.Math.Max(maxY, cell.y);
+    }
+
+    private void setCell(MapGridData mapGridData, Vector2Int cell, MapCellType cellType)
+    {
+        int arrayX = cell.x - mapGridData.Origin.x;
+        int arrayY = cell.y - mapGridData.Origin.y;
+        mapGridData.Cells[arrayX, arrayY] = cellType;
+    }
 }
