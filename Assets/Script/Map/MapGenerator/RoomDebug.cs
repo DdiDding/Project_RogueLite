@@ -30,13 +30,17 @@ public class RoomDebug : MonoBehaviour
     [SerializeField] private Color doorCandidateColor = Color.magenta;
     [SerializeField] private Color corridorColor = Color.red;
     [SerializeField] private Color floorCellColor = Color.white;
+    [SerializeField] private Color wallCellColor = Color.blue;
     [SerializeField] private Color doorCellColor = new Color(1f, 0.5f, 0f, 1f);
+    [SerializeField] private Color entryCellColor = Color.cyan;
     [SerializeField] private bool drawRoomIDs = true;
     [SerializeField] private bool drawConnections = true;
     [SerializeField] private bool drawDoorCandidates = true;
     [SerializeField] private bool drawCorridors = true;
     [SerializeField] private bool drawFloorCells = true;
+    [SerializeField] private bool drawWallCells = true;
     [SerializeField] private bool drawDoorCells = true;
+    [SerializeField] private bool drawEntryCells = true;
 
     //@todo RoomGenerator 후에 k값 설정 제대로 하기
     private readonly RoomGenerator generator = new RoomGenerator(3);
@@ -155,15 +159,55 @@ public class RoomDebug : MonoBehaviour
             }
         }
 
-        if (drawDoorCells && mapGridData != null)
+        if (drawWallCells && mapGridData != null)
+        {
+            Gizmos.color = wallCellColor;
+
+            for (int arrayY = 0; arrayY < mapGridData.Height; ++arrayY)
+            {
+                for (int arrayX = 0; arrayX < mapGridData.Width; ++arrayX)
+                {
+                    if (mapGridData.Cells[arrayX, arrayY] != MapCellType.Wall)
+                    {
+                        continue;
+                    }
+
+                    Vector3 cellPosition = new Vector3(
+                        arrayX + mapGridData.Origin.x,
+                        arrayY + mapGridData.Origin.y,
+                        0f);
+                    Gizmos.DrawWireCube(cellPosition, Vector3.one);
+                }
+            }
+        }
+
+        if (drawDoorCells && connectionPlans != null)
         {
             Gizmos.color = doorCellColor;
 
-            foreach (Vector2Int doorCell in mapGridData.DoorCells)
+            foreach (ConnectionPlan plan in connectionPlans)
             {
                 Gizmos.DrawWireCube(
-                    new Vector3(doorCell.x, doorCell.y, 0f),
+                    new Vector3(plan.FromDoorCell.x, plan.FromDoorCell.y, 0f),
                     Vector3.one * 0.6f);
+                Gizmos.DrawWireCube(
+                    new Vector3(plan.ToDoorCell.x, plan.ToDoorCell.y, 0f),
+                    Vector3.one * 0.6f);
+            }
+        }
+
+        if (drawEntryCells && connectionPlans != null)
+        {
+            Gizmos.color = entryCellColor;
+
+            foreach (ConnectionPlan plan in connectionPlans)
+            {
+                Gizmos.DrawWireCube(
+                    new Vector3(plan.FromEntryCell.x, plan.FromEntryCell.y, 0f),
+                    Vector3.one * 0.4f);
+                Gizmos.DrawWireCube(
+                    new Vector3(plan.ToEntryCell.x, plan.ToEntryCell.y, 0f),
+                    Vector3.one * 0.4f);
             }
         }
     }
@@ -189,6 +233,7 @@ public class RoomDebug : MonoBehaviour
      */
     private void generateConnections()
     {
+        generator.SnapRoomsToGrid(rooms);
         connections = generator.LinkRoom(rooms);
         connectionPlans.Clear();
         mapGridData = null;
@@ -200,8 +245,8 @@ public class RoomDebug : MonoBehaviour
     private void generateDoorCandidates()
     {
         connectionPlans = generator.CreateDoorCandidates(rooms, connections);
-        generator.SnapDoorCandidatesToGrid(connectionPlans);
         generator.DetermineDoorSides(rooms, connectionPlans);
+        generator.CreateDoorAndEntryCells(rooms, connectionPlans);
         generator.CreateSameAxisCorridorWaypoints(connectionPlans);
         generator.CreateCorridorPaths(connectionPlans);
         mapGridData = null;
@@ -213,6 +258,7 @@ public class RoomDebug : MonoBehaviour
         mapGridData = generator.CreateEmptyMapGridData(rooms, connectionPlans);
         generator.FillRoomCells(mapGridData, rooms);
         generator.FillConnectionCells(mapGridData, connectionPlans);
+        generator.CreateWallCells(mapGridData);
     }
 
     /**

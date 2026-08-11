@@ -300,18 +300,22 @@ public class RoomGenerator
      * @brief 문 후보 좌표를 복도 생성에 사용할 임시 타일 좌표로 변환한다.
      * @param connectionPlans 변환할 연결 계획 목록
      */
-    public void SnapDoorCandidatesToGrid(List<ConnectionPlan> connectionPlans)
-    {
-        foreach (ConnectionPlan connectionPlan in connectionPlans)
+    public void CreateDoorAndEntryCells(List<RoomData> rooms, List<ConnectionPlan> connectionPlans)
+    { 
+        foreach (ConnectionPlan plan in connectionPlans)
         {
-            connectionPlan.FromDoorCell =
-                Vector2Int.RoundToInt(connectionPlan.FromDoorCandidate);
-            connectionPlan.ToDoorCell =
-                Vector2Int.RoundToInt(connectionPlan.ToDoorCandidate);
-            connectionPlan.FromDoorSide = DoorSide.Unknown;
-            connectionPlan.ToDoorSide = DoorSide.Unknown;
-            connectionPlan.CorridorWaypoints.Clear();
-            connectionPlan.CorridorPath.Clear();
+            RoomData fromRoom = rooms[plan.FromRoomID];
+            RoomData toRoom = rooms[plan.ToRoomID];
+
+            calculateDoorAndEntryCells(fromRoom, plan.FromDoorCandidate, plan.FromDoorSide, out Vector2Int fromDoorCell, out Vector2Int fromEntryCell);
+            calculateDoorAndEntryCells(toRoom, plan.ToDoorCandidate, plan.ToDoorSide, out Vector2Int toDoorCell, out Vector2Int toEntryCell);
+
+            plan.FromDoorCell = fromDoorCell;
+            plan.FromEntryCell = fromEntryCell;
+            plan.ToDoorCell = toDoorCell;
+            plan.ToEntryCell = toEntryCell;
+            plan.CorridorWaypoints.Clear();
+            plan.CorridorPath.Clear();
         }
     }
 
@@ -436,10 +440,7 @@ public class RoomGenerator
         minY -= wallPadding;
         maxY += wallPadding;
 
-        return new MapGridData(
-            new Vector2Int(minX, minY),
-            maxX - minX + 1,
-            maxY - minY + 1);
+        return new MapGridData(new Vector2Int(minX, minY), maxX - minX + 1, maxY - minY + 1);
     }
 
     // 방 저장
@@ -481,6 +482,45 @@ public class RoomGenerator
             setCell(mapGridData, plan.ToDoorCell, MapCellType.Floor);
             mapGridData.DoorCells.Add(plan.FromDoorCell);
             mapGridData.DoorCells.Add(plan.ToDoorCell);
+        }
+    }
+
+    public void CreateWallCells(MapGridData mapGridData)
+    {
+        if (mapGridData == null)
+        {
+            throw new System.ArgumentNullException(nameof(mapGridData));
+        }
+
+        for (int arrayY = 0; arrayY < mapGridData.Height; ++arrayY)
+        {
+            for (int arrayX = 0; arrayX < mapGridData.Width; ++arrayX)
+            {
+                if (mapGridData.Cells[arrayX, arrayY] != MapCellType.Floor)
+                {
+                    continue;
+                }
+
+                for (int offsetY = -1; offsetY <= 1; ++offsetY)
+                {
+                    for (int offsetX = -1; offsetX <= 1; ++offsetX)
+                    {
+                        int neighborX = arrayX + offsetX;
+                        int neighborY = arrayY + offsetY;
+
+                        if (neighborX < 0 || neighborX >= mapGridData.Width ||
+                            neighborY < 0 || neighborY >= mapGridData.Height)
+                        {
+                            continue;
+                        }
+
+                        if (mapGridData.Cells[neighborX, neighborY] == MapCellType.Empty)
+                        {
+                            mapGridData.Cells[neighborX, neighborY] = MapCellType.Wall;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -680,6 +720,64 @@ public class RoomGenerator
         }
 
         return offset.y < 0f ? DoorSide.Bottom : DoorSide.Top;
+    }
+
+    private void calculateDoorAndEntryCells(
+        RoomData room,
+        Vector2 doorCandidate,
+        DoorSide doorSide,
+        out Vector2Int doorCell,
+        out Vector2Int entryCell)
+    {
+        switch (doorSide)
+        {
+            case DoorSide.Left:
+            {
+                int cellY = Mathf.Clamp(
+                    Mathf.RoundToInt(doorCandidate.y),
+                    room.Bounds.Bottom,
+                    room.Bounds.Top);
+                entryCell = new Vector2Int(room.Bounds.Left, cellY);
+                doorCell = new Vector2Int(room.Bounds.Left - 1, cellY);
+                return;
+            }
+
+            case DoorSide.Right:
+            {
+                int cellY = Mathf.Clamp(
+                    Mathf.RoundToInt(doorCandidate.y),
+                    room.Bounds.Bottom,
+                    room.Bounds.Top);
+                entryCell = new Vector2Int(room.Bounds.Right, cellY);
+                doorCell = new Vector2Int(room.Bounds.Right + 1, cellY);
+                return;
+            }
+
+            case DoorSide.Bottom:
+            {
+                int cellX = Mathf.Clamp(
+                    Mathf.RoundToInt(doorCandidate.x),
+                    room.Bounds.Left,
+                    room.Bounds.Right);
+                entryCell = new Vector2Int(cellX, room.Bounds.Bottom);
+                doorCell = new Vector2Int(cellX, room.Bounds.Bottom - 1);
+                return;
+            }
+
+            case DoorSide.Top:
+            {
+                int cellX = Mathf.Clamp(
+                    Mathf.RoundToInt(doorCandidate.x),
+                    room.Bounds.Left,
+                    room.Bounds.Right);
+                entryCell = new Vector2Int(cellX, room.Bounds.Top);
+                doorCell = new Vector2Int(cellX, room.Bounds.Top + 1);
+                return;
+            }
+
+            default:
+                throw new System.InvalidOperationException("Door side must be determined first.");
+        }
     }
 
     private bool isHorizontalDoorSide(DoorSide doorSide)

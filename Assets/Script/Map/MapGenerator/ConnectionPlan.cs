@@ -23,6 +23,8 @@ public class ConnectionPlan
 
     public Vector2Int FromDoorCell { get; set; }
     public Vector2Int ToDoorCell { get; set; }
+    public Vector2Int FromEntryCell { get; set; }
+    public Vector2Int ToEntryCell { get; set; }
 
     // 문 후보가 어느 방의 어느 면에 위치하는지 저장
     public DoorSide FromDoorSide { get; set; }
