@@ -462,7 +462,7 @@ public class RoomGenerator
             {
                 for (int cellX = room.Bounds.Left; cellX <= room.Bounds.Right; ++cellX)
                 {
-                    setCell(mapGridData, new Vector2Int(cellX, cellY), MapCellType.Floor);
+                    setCell(mapGridData, new Vector2Int(cellX, cellY), MapCellType.Ground);
                 }
             }
         }
@@ -475,11 +475,11 @@ public class RoomGenerator
         {
             foreach (Vector2Int corridorCell in plan.CorridorPath)
             {
-                setCell(mapGridData, corridorCell, MapCellType.Floor);
+                setCell(mapGridData, corridorCell, MapCellType.Ground);
             }
 
-            setCell(mapGridData, plan.FromDoorCell, MapCellType.Floor);
-            setCell(mapGridData, plan.ToDoorCell, MapCellType.Floor);
+            setCell(mapGridData, plan.FromDoorCell, MapCellType.Ground);
+            setCell(mapGridData, plan.ToDoorCell, MapCellType.Ground);
             mapGridData.DoorCells.Add(plan.FromDoorCell);
             mapGridData.DoorCells.Add(plan.ToDoorCell);
         }
@@ -496,7 +496,7 @@ public class RoomGenerator
         {
             for (int arrayX = 0; arrayX < mapGridData.Width; ++arrayX)
             {
-                if (mapGridData.Cells[arrayX, arrayY] != MapCellType.Floor)
+                if (mapGridData.Cells[arrayX, arrayY] != MapCellType.Ground)
                 {
                     continue;
                 }

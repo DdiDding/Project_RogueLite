@@ -33,6 +33,42 @@ public class RoomDebugEditor : Editor
         DrawActionButton(roomDebug, "Generate Connections", "generateConnections");
         DrawActionButton(roomDebug, "Generate Door Candidates", "generateDoorCandidates");
         DrawActionButton(roomDebug, "Generate Map Cells", "generateMapCells");
+
+        if (GUILayout.Button("Save Map Asset"))
+        {
+            SaveMapAsset(roomDebug);
+        }
+    }
+
+    private static void SaveMapAsset(RoomDebug roomDebug)
+    {
+        if (roomDebug.MapGridData == null)
+        {
+            Debug.LogWarning("Generate Map Cells before saving the map asset.");
+            return;
+        }
+
+        string path = EditorUtility.SaveFilePanelInProject(
+            "Save Map Data",
+            "MapData",
+            "asset",
+            "Select a location for the map data asset.");
+
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        path = AssetDatabase.GenerateUniqueAssetPath(path);
+
+        MapDataAsset mapDataAsset =
+            MapDataConverter.CreateMapDataAsset(roomDebug.MapGridData);
+
+        AssetDatabase.CreateAsset(mapDataAsset, path);
+        AssetDatabase.SaveAssets();
+
+        Selection.activeObject = mapDataAsset;
+        EditorGUIUtility.PingObject(mapDataAsset);
     }
 
     /**

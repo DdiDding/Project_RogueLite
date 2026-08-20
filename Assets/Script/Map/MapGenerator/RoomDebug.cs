@@ -50,6 +50,8 @@ public class RoomDebug : MonoBehaviour
     private MapGridData mapGridData;
     private Coroutine mAutoResolveCoroutine;
 
+    public MapGridData MapGridData => mapGridData;
+
     /**************************************************************************/
     // Private Functions
     /**************************************************************************/
@@ -145,7 +147,7 @@ public class RoomDebug : MonoBehaviour
             {
                 for (int arrayX = 0; arrayX < mapGridData.Width; ++arrayX)
                 {
-                    if (mapGridData.Cells[arrayX, arrayY] != MapCellType.Floor)
+                    if (mapGridData.Cells[arrayX, arrayY] != MapCellType.Ground)
                     {
                         continue;
                     }

@@ -4,7 +4,7 @@ using UnityEngine;
 public enum MapCellType
 {
     Empty,
-    Floor,
+    Ground,
     Wall
 }
 
