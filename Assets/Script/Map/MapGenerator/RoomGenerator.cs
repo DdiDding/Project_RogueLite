@@ -128,7 +128,12 @@ public class RoomGenerator
      * @param roomQuantity 생성할 방의 개수
      * @return 생성된 방들을 담은 리스트
      */
-    public List<RoomData> GenerateRooms(int roomQuantity)
+    public List<RoomData> GenerateRooms(
+        int roomQuantity,
+        Vector2Int minRoomSize,
+        Vector2Int maxRoomSize,
+        int minPrimitiveCount,
+        int maxPrimitiveCount)
     {
         List<RoomData> rooms = new List<RoomData>();
 
@@ -138,13 +143,9 @@ public class RoomGenerator
             room.RoomID = i;
             room.Center = Vector2.zero;
 
-            room.Height = Random.Range(10, 30); /*int만 생성*/
-            bool isHeightEven = room.Height % 2 == 0;
-            if (isHeightEven) room.Height += 1; /*홀수로 만들어주기*/
-
-            room.Width = Random.Range(10, 30);
-            bool isEvenWidth = room.Width % 2 == 0;
-            if (isEvenWidth) room.Width += 1; /*홀수로 만들어주기*/
+            room.Width = randomOdd(minRoomSize.x, maxRoomSize.x);
+            room.Height = randomOdd(minRoomSize.y, maxRoomSize.y);
+            createRoomPrimitives(room, minPrimitiveCount, maxPrimitiveCount);
 
             rooms.Add(room);
         }
@@ -232,17 +233,8 @@ public class RoomGenerator
         {
             int centerX = Mathf.RoundToInt(room.Center.x);
             int centerY = Mathf.RoundToInt(room.Center.y);
-            int halfWidth = room.Width / 2;
-            int halfHeight = room.Height / 2;
-
             room.Center = new Vector2(centerX, centerY);
-            room.Bounds = new RoomBounds
-            {
-                Left = centerX - halfWidth,
-                Right = centerX + halfWidth,
-                Bottom = centerY - halfHeight,
-                Top = centerY + halfHeight
-            };
+            rebuildRoomGeometry(room);
         }
     }
 
@@ -307,8 +299,8 @@ public class RoomGenerator
             RoomData fromRoom = rooms[plan.FromRoomID];
             RoomData toRoom = rooms[plan.ToRoomID];
 
-            calculateDoorAndEntryCells(fromRoom, plan.FromDoorCandidate, plan.FromDoorSide, out Vector2Int fromDoorCell, out Vector2Int fromEntryCell);
-            calculateDoorAndEntryCells(toRoom, plan.ToDoorCandidate, plan.ToDoorSide, out Vector2Int toDoorCell, out Vector2Int toEntryCell);
+            calculateDoorAndEntryCells(plan.FromDoorCandidate, plan.FromDoorSide, out Vector2Int fromDoorCell, out Vector2Int fromEntryCell);
+            calculateDoorAndEntryCells(plan.ToDoorCandidate, plan.ToDoorSide, out Vector2Int toDoorCell, out Vector2Int toEntryCell);
 
             plan.FromDoorCell = fromDoorCell;
             plan.FromEntryCell = fromEntryCell;
@@ -332,8 +324,8 @@ public class RoomGenerator
             RoomData fromRoom = rooms[plan.FromRoomID];
             RoomData toRoom = rooms[plan.ToRoomID];
 
-            plan.FromDoorSide = calculateDoorSide(fromRoom, plan.FromDoorCandidate);
-            plan.ToDoorSide = calculateDoorSide(toRoom, plan.ToDoorCandidate);
+            plan.FromDoorSide = calculateDoorSide(fromRoom, plan.FromDoorCandidate, toRoom.Center);
+            plan.ToDoorSide = calculateDoorSide(toRoom, plan.ToDoorCandidate, fromRoom.Center);
             plan.CorridorWaypoints.Clear();
             plan.CorridorPath.Clear();
         }
@@ -458,12 +450,9 @@ public class RoomGenerator
 
         foreach (RoomData room in rooms)
         {
-            for (int cellY = room.Bounds.Bottom; cellY <= room.Bounds.Top; ++cellY)
+            foreach (Vector2Int floorCell in room.FloorCells)
             {
-                for (int cellX = room.Bounds.Left; cellX <= room.Bounds.Right; ++cellX)
-                {
-                    setCell(mapGridData, new Vector2Int(cellX, cellY), MapCellType.Ground);
-                }
+                setCell(mapGridData, floorCell, MapCellType.Ground);
             }
         }
     }
@@ -682,98 +671,72 @@ public class RoomGenerator
     }
 
     /**
-     * @brief room에서 target으로 향하는 벡터와 방의 테두리의 접점을 계산한다.
+     * @brief target 방향과 가장 가까운 실제 방 외곽 셀을 문 후보로 선택한다.
      * @param room 연결을 시작하는 방
      * @param target 연결이 끝날 방의 중앙 좌표
      */
     private Vector2 calculateDoorCandidate(RoomData room, Vector2 target)
     {
-        Vector2 direction = target - room.Center;
+        Vector2Int outward = getDominantDirection(target - room.Center);
+        Vector2Int bestCell = Vector2Int.RoundToInt(room.Center);
+        float bestDistance = float.MaxValue;
 
-        float halfWidth = room.Width * 0.5f;
-        float halfHeight = room.Height * 0.5f;
+        foreach (Vector2Int floorCell in room.FloorCells)
+        {
+            if (room.FloorCells.Contains(floorCell + outward)) continue;
 
-        // 간선 방향으로 먼저 벽에 도달하기까지 필요한 값
-        float tx = halfWidth / Mathf.Abs(direction.x);
-        float ty = halfHeight / Mathf.Abs(direction.y);
+            float distance = ((Vector2)floorCell - target).sqrMagnitude;
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestCell = floorCell;
+            }
+        }
 
-        // 적은 값이 먼저 벽과 접하는 지점임
-        float intersectionRatio = Mathf.Min(tx, ty);
-        return room.Center + direction * intersectionRatio;
+        return bestCell;
     }
 
     /**
      * @brief 문 후보가 위치한 방의 벽 방향을 계산한다.
      */
-    private DoorSide calculateDoorSide(RoomData room, Vector2 doorCandidate)
+    private DoorSide calculateDoorSide(RoomData room, Vector2 doorCandidate, Vector2 target)
     {
-        Vector2 offset = doorCandidate - room.Center;
+        Vector2Int candidateCell = Vector2Int.RoundToInt(doorCandidate);
+        Vector2Int outward = getDominantDirection(target - room.Center);
 
-        // 방 크기로 정규화한 축 거리의 비율을 계산 (나눗셈을 없애기 위한 곱셉 적용)
-        float horizontalRatio = Mathf.Abs(offset.x) * room.Height;
-        float verticalRatio = Mathf.Abs(offset.y) * room.Width;
-
-        // 벽까지의 비율은 항상 100%므로 당연하게도 더 큰 비율이 문이 위치한 벽임
-        if (horizontalRatio >= verticalRatio)
+        if (room.FloorCells.Contains(candidateCell + outward) == false)
         {
-            return offset.x < 0f ? DoorSide.Left : DoorSide.Right;
+            return directionToDoorSide(outward);
         }
 
-        return offset.y < 0f ? DoorSide.Bottom : DoorSide.Top;
+        throw new System.InvalidOperationException("Door candidate must be on the room boundary.");
     }
 
     private void calculateDoorAndEntryCells(
-        RoomData room,
         Vector2 doorCandidate,
         DoorSide doorSide,
         out Vector2Int doorCell,
         out Vector2Int entryCell)
     {
+        entryCell = Vector2Int.RoundToInt(doorCandidate);
+
         switch (doorSide)
         {
             case DoorSide.Left:
-            {
-                int cellY = Mathf.Clamp(
-                    Mathf.RoundToInt(doorCandidate.y),
-                    room.Bounds.Bottom,
-                    room.Bounds.Top);
-                entryCell = new Vector2Int(room.Bounds.Left, cellY);
-                doorCell = new Vector2Int(room.Bounds.Left - 1, cellY);
+                doorCell = entryCell + Vector2Int.left;
                 return;
-            }
 
             case DoorSide.Right:
-            {
-                int cellY = Mathf.Clamp(
-                    Mathf.RoundToInt(doorCandidate.y),
-                    room.Bounds.Bottom,
-                    room.Bounds.Top);
-                entryCell = new Vector2Int(room.Bounds.Right, cellY);
-                doorCell = new Vector2Int(room.Bounds.Right + 1, cellY);
+                doorCell = entryCell + Vector2Int.right;
                 return;
-            }
 
             case DoorSide.Bottom:
-            {
-                int cellX = Mathf.Clamp(
-                    Mathf.RoundToInt(doorCandidate.x),
-                    room.Bounds.Left,
-                    room.Bounds.Right);
-                entryCell = new Vector2Int(cellX, room.Bounds.Bottom);
-                doorCell = new Vector2Int(cellX, room.Bounds.Bottom - 1);
+                doorCell = entryCell + Vector2Int.down;
                 return;
-            }
 
             case DoorSide.Top:
-            {
-                int cellX = Mathf.Clamp(
-                    Mathf.RoundToInt(doorCandidate.x),
-                    room.Bounds.Left,
-                    room.Bounds.Right);
-                entryCell = new Vector2Int(cellX, room.Bounds.Top);
-                doorCell = new Vector2Int(cellX, room.Bounds.Top + 1);
+                doorCell = entryCell + Vector2Int.up;
                 return;
-            }
 
             default:
                 throw new System.InvalidOperationException("Door side must be determined first.");
@@ -783,6 +746,128 @@ public class RoomGenerator
     private bool isHorizontalDoorSide(DoorSide doorSide)
     {
         return doorSide == DoorSide.Left || doorSide == DoorSide.Right;
+    }
+
+    private int randomOdd(int minValue, int maxValue)
+    {
+        int firstOdd = System.Math.Max(3, System.Math.Min(minValue, maxValue));
+        int lastOdd = System.Math.Max(firstOdd, System.Math.Max(minValue, maxValue));
+
+        if (firstOdd % 2 == 0) ++firstOdd;
+        if (lastOdd % 2 == 0) --lastOdd;
+        if (lastOdd < firstOdd) lastOdd = firstOdd;
+
+        int oddCount = (lastOdd - firstOdd) / 2 + 1;
+        return firstOdd + Random.Range(0, oddCount) * 2;
+    }
+
+    private void createRoomPrimitives(RoomData room, int minCount, int maxCount)
+    {
+        int clampedMinCount = Mathf.Clamp(minCount, 2, 4);
+        int clampedMaxCount = Mathf.Clamp(maxCount, clampedMinCount, 4);
+        int primitiveCount = Random.Range(clampedMinCount, clampedMaxCount + 1);
+
+        int horizontalHeight = randomOdd(
+            System.Math.Max(3, room.Height / 3),
+            System.Math.Max(3, room.Height * 2 / 3));
+        int verticalWidth = randomOdd(
+            System.Math.Max(3, room.Width / 3),
+            System.Math.Max(3, room.Width * 2 / 3));
+
+        room.Primitives.Add(new RoomPrimitive(
+            new Vector2Int(0, randomPrimitiveOffset(room.Height, horizontalHeight)),
+            room.Width,
+            horizontalHeight));
+        room.Primitives.Add(new RoomPrimitive(
+            new Vector2Int(randomPrimitiveOffset(room.Width, verticalWidth), 0),
+            verticalWidth,
+            room.Height));
+
+        for (int i = 2; i < primitiveCount; ++i)
+        {
+            int width = randomOdd(System.Math.Max(3, room.Width / 3), room.Width);
+            int height = randomOdd(System.Math.Max(3, room.Height / 3), room.Height);
+            room.Primitives.Add(new RoomPrimitive(
+                new Vector2Int(
+                    randomPrimitiveOffset(room.Width, width),
+                    randomPrimitiveOffset(room.Height, height)),
+                width,
+                height));
+        }
+    }
+
+    private int randomPrimitiveOffset(int roomSize, int primitiveSize)
+    {
+        int maxOffset = System.Math.Min((roomSize - primitiveSize) / 2, primitiveSize / 2);
+        return Random.Range(-maxOffset, maxOffset + 1);
+    }
+
+    private void rebuildRoomGeometry(RoomData room)
+    {
+        if (room.Primitives.Count == 0)
+        {
+            room.Primitives.Add(new RoomPrimitive(Vector2Int.zero, room.Width, room.Height));
+        }
+
+        int centerX = Mathf.RoundToInt(room.Center.x);
+        int centerY = Mathf.RoundToInt(room.Center.y);
+        int minX = int.MaxValue;
+        int maxX = int.MinValue;
+        int minY = int.MaxValue;
+        int maxY = int.MinValue;
+
+        room.FloorCells.Clear();
+        foreach (RoomPrimitive primitive in room.Primitives)
+        {
+            int primitiveCenterX = centerX + primitive.Offset.x;
+            int primitiveCenterY = centerY + primitive.Offset.y;
+            int left = primitiveCenterX - primitive.Width / 2;
+            int right = primitiveCenterX + primitive.Width / 2;
+            int bottom = primitiveCenterY - primitive.Height / 2;
+            int top = primitiveCenterY + primitive.Height / 2;
+
+            minX = System.Math.Min(minX, left);
+            maxX = System.Math.Max(maxX, right);
+            minY = System.Math.Min(minY, bottom);
+            maxY = System.Math.Max(maxY, top);
+
+            for (int y = bottom; y <= top; ++y)
+            {
+                for (int x = left; x <= right; ++x)
+                {
+                    room.FloorCells.Add(new Vector2Int(x, y));
+                }
+            }
+        }
+
+        room.Bounds = new RoomBounds
+        {
+            Left = minX,
+            Right = maxX,
+            Bottom = minY,
+            Top = maxY
+        };
+        room.Width = maxX - minX + 1;
+        room.Height = maxY - minY + 1;
+    }
+
+    private Vector2Int getDominantDirection(Vector2 direction)
+    {
+        if (Mathf.Abs(direction.x) >= Mathf.Abs(direction.y))
+        {
+            return direction.x < 0f ? Vector2Int.left : Vector2Int.right;
+        }
+
+        return direction.y < 0f ? Vector2Int.down : Vector2Int.up;
+    }
+
+    private DoorSide directionToDoorSide(Vector2Int direction)
+    {
+        if (direction == Vector2Int.left) return DoorSide.Left;
+        if (direction == Vector2Int.right) return DoorSide.Right;
+        if (direction == Vector2Int.down) return DoorSide.Bottom;
+        if (direction == Vector2Int.up) return DoorSide.Top;
+        return DoorSide.Unknown;
     }
 
 

@@ -15,6 +15,8 @@ public class RoomDebug : MonoBehaviour
     [Header("Generation")]
     [SerializeField] private Vector2Int minRoomSize = new Vector2Int(6, 6);
     [SerializeField] private Vector2Int maxRoomSize = new Vector2Int(14, 12);
+    [SerializeField, Range(2, 4)] private int minPrimitiveCount = 2;
+    [SerializeField, Range(2, 4)] private int maxPrimitiveCount = 4;
     [SerializeField] private int roomCount = 10;
     [SerializeField] private float pushStrength = 0.25f;
     [SerializeField] private float roomMargin = 10.0f;
@@ -25,6 +27,7 @@ public class RoomDebug : MonoBehaviour
 
     [Header("Gizmos")]
     [SerializeField] private Color roomColor = new Color(0.2f, 0.9f, 1.0f, 1.0f);
+    [SerializeField] private Color roomBoundsColor = new Color(1.0f, 1.0f, 1.0f, 0.35f);
     [SerializeField] private Color centerColor = Color.yellow;
     [SerializeField] private Color connectionColor = Color.green;
     [SerializeField] private Color doorCandidateColor = Color.magenta;
@@ -58,7 +61,12 @@ public class RoomDebug : MonoBehaviour
 
     private void OnEnable()
     {
-        rooms = generator.GenerateRooms(roomCount);
+        rooms = generator.GenerateRooms(
+            roomCount,
+            minRoomSize,
+            maxRoomSize,
+            minPrimitiveCount,
+            maxPrimitiveCount);
     }
 
     /**
@@ -83,14 +91,19 @@ public class RoomDebug : MonoBehaviour
         {
             Gizmos.color = roomColor;
 
-            Vector2 roomPosition = new Vector2(room.Center.x, room.Center.y);
-            Vector2 roomSize = new Vector2(room.Width, room.Height);
+            foreach (RoomPrimitive primitive in room.Primitives)
+            {
+                Vector2 primitivePosition = room.Center + primitive.Offset;
+                Gizmos.DrawWireCube(
+                    primitivePosition,
+                    new Vector2(primitive.Width, primitive.Height));
+            }
 
-
-            Gizmos.DrawWireCube(roomPosition, roomSize);
+            Gizmos.color = roomBoundsColor;
+            Gizmos.DrawWireCube(room.Center, new Vector2(room.Width, room.Height));
 
             Gizmos.color = centerColor;
-            Gizmos.DrawSphere(roomPosition, 0.5f);
+            Gizmos.DrawSphere(room.Center, 0.5f);
         }
 
 
@@ -227,7 +240,12 @@ public class RoomDebug : MonoBehaviour
         connections.Clear();
         connectionPlans.Clear();
         mapGridData = null;
-        rooms = generator.GenerateRooms(roomCount);
+        rooms = generator.GenerateRooms(
+            roomCount,
+            minRoomSize,
+            maxRoomSize,
+            minPrimitiveCount,
+            maxPrimitiveCount);
     }
 
     /**
